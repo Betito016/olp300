@@ -38,9 +38,9 @@ class UsuarioModel {
             return false;
         }
 
-        if (!password_verify($contrasena, $row['Contrasena'])) {
-            return false;
-        }
+        if ($contrasena !== $row['Contrasena'] && !password_verify($contrasena, $row['Contrasena'])) {
+    return false;
+}
 
         // No exponer el hash al controlador
         unset($row['Contrasena']);
