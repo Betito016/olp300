@@ -1,6 +1,14 @@
 <?php
-// config/db.php — Conexión PDO centralizada
-// Las variables de entorno se leen desde Railway (o .env local)
+// config/db.php — Conexion PDO centralizada
+// Responsabilidad: proveer una instancia de conexion a la BD.
+// Las credenciales se leen desde variables de entorno (Railway).
+//
+// Este componente es utilizado exclusivamente por los Modelos:
+//   - UsuarioModel.php
+//   - LibroModel.php
+//
+// Estandar: PSR-12
+// Patron: MVC — capa de infraestructura compartida por los Modelos
 
 function getDB(): PDO {
     $host     = getenv('DB_HOST')     ?: 'localhost';
@@ -19,8 +27,7 @@ function getDB(): PDO {
         ]);
         return $pdo;
     } catch (PDOException $e) {
-        // En producción no exponer detalles del error
         error_log('DB Connection error: ' . $e->getMessage());
-        die(json_encode(['error' => 'Error de conexión a la base de datos.']));
+        die(json_encode(['error' => 'Error de conexion a la base de datos.']));
     }
 }
