@@ -1,6 +1,15 @@
 <?php
 // models/LibroModel.php
-// Responsabilidad: acceso a datos de la tabla Libros (CRUD completo)
+// MODELO - Acceso a datos de la tabla Libros.
+// Responsabilidad exclusiva: ejecutar operaciones SQL sobre la BD.
+// No contiene logica de presentacion ni manejo de sesiones.
+//
+// Estados del sistema que dependen de este modelo:
+//   E2 - Catalogo de Libros (getCatalogo, getTotalLibros)
+//   E3 - Ingresar Nuevo Libro (existeISBN, insertar)
+//   E4 - Detalles del Libro (getByISBN)
+//   E5 - Editar Libro (getByISBN, actualizar)
+//   E6 - Eliminar Libro (getByISBN, eliminar)
 
 require_once __DIR__ . '/../config/db.php';
 
@@ -14,12 +23,8 @@ class LibroModel {
     }
 
     // ----------------------------------------------------------
-    // READ – Catálogo con filtro y paginación
+    // E2 - Catalogo con filtro (T06) y paginacion (T07)
     // ----------------------------------------------------------
-
-    /**
-     * Retorna libros paginados con filtro opcional por Título, Autor o ISBN.
-     */
     public function getCatalogo(int $pagina = 1, string $filtro = '', string $campo = ''): array {
         $offset = ($pagina - 1) * $this->porPagina;
         $params = [];
@@ -50,9 +55,6 @@ class LibroModel {
         return $stmt->fetchAll();
     }
 
-    /**
-     * Total de libros para calcular páginas.
-     */
     public function getTotalLibros(string $filtro = '', string $campo = ''): int {
         $params = [];
         $where  = '';
@@ -70,12 +72,8 @@ class LibroModel {
     }
 
     // ----------------------------------------------------------
-    // READ – Detalle individual
+    // E4 / E5 / E6 - Buscar libro individual
     // ----------------------------------------------------------
-
-    /**
-     * Retorna todos los campos de un libro por ISBN.
-     */
     public function getByISBN(string $isbn): array|false {
         $stmt = $this->db->prepare(
             'SELECT * FROM Libros WHERE ISBN = :isbn LIMIT 1'
@@ -84,9 +82,9 @@ class LibroModel {
         return $stmt->fetch();
     }
 
-    /**
-     * Verifica si un ISBN ya existe en la tabla.
-     */
+    // ----------------------------------------------------------
+    // E3 - Verificar ISBN duplicado (T12)
+    // ----------------------------------------------------------
     public function existeISBN(string $isbn): bool {
         $stmt = $this->db->prepare(
             'SELECT 1 FROM Libros WHERE ISBN = :isbn LIMIT 1'
@@ -96,12 +94,8 @@ class LibroModel {
     }
 
     // ----------------------------------------------------------
-    // CREATE
+    // E3 - Insertar nuevo libro (T14)
     // ----------------------------------------------------------
-
-    /**
-     * Inserta un nuevo libro. Retorna true en éxito.
-     */
     public function insertar(array $datos): bool {
         $stmt = $this->db->prepare(
             'INSERT INTO Libros
@@ -129,12 +123,8 @@ class LibroModel {
     }
 
     // ----------------------------------------------------------
-    // UPDATE
+    // E5 - Actualizar libro (T18) — incluye campo Estado
     // ----------------------------------------------------------
-
-    /**
-     * Actualiza un libro existente (ISBN no cambia).
-     */
     public function actualizar(array $datos): bool {
         $stmt = $this->db->prepare(
             'UPDATE Libros SET
@@ -147,7 +137,8 @@ class LibroModel {
                 Precio          = :precio,
                 Ubicacion       = :ubicacion,
                 NumeroCopias    = :copias,
-                Categoria       = :categoria
+                Categoria       = :categoria,
+                Estado          = :estado
              WHERE ISBN = :isbn'
         );
         return $stmt->execute([
@@ -162,16 +153,13 @@ class LibroModel {
             ':ubicacion' => $datos['ubicacion'],
             ':copias'    => $datos['copias'],
             ':categoria' => $datos['categoria'],
+            ':estado'    => $datos['estado'] ?? 'disponible',
         ]);
     }
 
     // ----------------------------------------------------------
-    // DELETE
+    // E6 - Eliminar libro (T21)
     // ----------------------------------------------------------
-
-    /**
-     * Elimina un libro por ISBN. Retorna true en éxito.
-     */
     public function eliminar(string $isbn): bool {
         $stmt = $this->db->prepare(
             'DELETE FROM Libros WHERE ISBN = :isbn'
