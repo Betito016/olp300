@@ -1,6 +1,16 @@
 <?php
 // models/UsuarioModel.php
-// Responsabilidad: acceso a datos de la tabla Usuarios
+// MODELO - Acceso a datos de la tabla Usuarios.
+// Responsabilidad exclusiva: verificar credenciales contra la BD.
+// No contiene logica de presentacion ni manejo de sesiones.
+//
+// Estados del sistema que dependen de este modelo:
+//   E1 - Autenticacion (autenticar)
+//
+// Transiciones relacionadas:
+//   T02 - Credenciales invalidas
+//   T03 - Campos vacios
+//   T04 - Login exitoso
 
 require_once __DIR__ . '/../config/db.php';
 
@@ -12,10 +22,9 @@ class UsuarioModel {
         $this->db = getDB();
     }
 
-    /**
-     * Busca un usuario por su nombre de usuario.
-     * Retorna el registro completo o false si no existe.
-     */
+    // ----------------------------------------------------------
+    // Buscar usuario por nombre de usuario
+    // ----------------------------------------------------------
     public function findByUsuario(string $usuario): array|false {
         $stmt = $this->db->prepare(
             'SELECT Usuario, Contrasena, Nombre, Email
@@ -27,22 +36,25 @@ class UsuarioModel {
         return $stmt->fetch();
     }
 
-    /**
-     * Verifica credenciales: usuario existe y contraseña coincide con el hash.
-     * Retorna el registro del usuario (sin contraseña) o false.
-     */
+    // ----------------------------------------------------------
+    // T02 / T04 - Verificar credenciales
+    // Soporta bcrypt (password_verify) y texto plano como fallback
+    // ----------------------------------------------------------
     public function autenticar(string $usuario, string $contrasena): array|false {
         $row = $this->findByUsuario($usuario);
 
         if ($row === false) {
-            return false;
+            return false; // T02 - Usuario no existe
         }
 
-        if ($contrasena !== $row['Contrasena'] && !password_verify($contrasena, $row['Contrasena'])) {
-    return false;
-}
+        $hashValido   = password_verify($contrasena, $row['Contrasena']);
+        $planoValido  = ($contrasena === $row['Contrasena']);
 
-        // No exponer el hash al controlador
+        if (!$hashValido && !$planoValido) {
+            return false; // T02 - Contrasena incorrecta
+        }
+
+        // T04 - Credenciales validas, no exponer hash al controlador
         unset($row['Contrasena']);
         return $row;
     }
