@@ -34,7 +34,6 @@
       </div>
 
       <form method="POST" action="index.php?action=editar">
-        <!-- ISBN fijo, no editable -->
         <input type="hidden" name="isbn" value="<?= htmlspecialchars($libro['ISBN']) ?>">
 
         <div class="form-grid">
@@ -106,7 +105,7 @@
               class="<?= in_array('ubicacion', $errores) ? 'error' : '' ?>">
           </div>
 
-          <div class="form-group full">
+          <div class="form-group">
             <label for="categoria">Categoría</label>
             <select id="categoria" name="categoria"
               class="<?= in_array('categoria', $errores) ? 'error' : '' ?>">
@@ -117,6 +116,19 @@
                   $sel = ($libro['Categoria'] ?? '') === $cat ? 'selected' : '';
               ?>
               <option value="<?= $cat ?>" <?= $sel ?>><?= $cat ?></option>
+              <?php endforeach; ?>
+            </select>
+          </div>
+
+          <div class="form-group">
+            <label for="estado">Estado</label>
+            <select id="estado" name="estado">
+              <?php
+                $estados = ['disponible','prestado','mantenimiento','perdido'];
+                foreach ($estados as $est):
+                  $sel = ($libro['Estado'] ?? 'disponible') === $est ? 'selected' : '';
+              ?>
+              <option value="<?= $est ?>" <?= $sel ?>><?= ucfirst($est) ?></option>
               <?php endforeach; ?>
             </select>
           </div>
