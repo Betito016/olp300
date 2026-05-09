@@ -1,6 +1,25 @@
 <?php
 // controllers/LibroController.php
-// Responsabilidad: lógica de negocio para el catálogo CRUD de libros
+// CONTROLADOR - Maneja las transiciones del Estado E2 al E6.
+//
+// Transiciones implementadas:
+//   T04 - (entrada) Login exitoso -> mostrar catalogo
+//   T06 - Filtro aplicado (Titulo / Autor / ISBN)
+//   T07 - Paginacion (avanzar/retroceder)
+//   T08 - Clic en "Nuevo Libro" -> E3
+//   T09 - Clic en "Ver detalles" -> E4
+//   T10 - Clic en "Editar" -> E5
+//   T11 - Clic en "Eliminar" -> E6
+//   T12 - Alta invalida (ISBN duplicado)
+//   T13 - Alta invalida (datos requeridos)
+//   T14 - Alta exitosa -> regresar a E2
+//   T15 - Volver desde E3 sin guardar -> E2
+//   T16 - Volver desde E4 -> E2
+//   T17 - Cambio invalido (datos requeridos)
+//   T18 - Cambio exitoso -> regresar a E2
+//   T20 - Volver desde E5 sin modificar -> E2
+//   T21 - Baja exitosa -> regresar a E2
+//   T22 - Cancelar eliminacion -> regresar a E2
 
 require_once __DIR__ . '/../models/LibroModel.php';
 
@@ -16,7 +35,7 @@ class LibroController {
     // Helpers
     // ----------------------------------------------------------
 
-    /** Redirige al login si no hay sesión activa */
+    /** T04 / Proteccion de rutas: redirige al login si no hay sesion */
     private function requireAuth(): void {
         if (empty($_SESSION['usuario'])) {
             header('Location: index.php?action=login');
@@ -24,12 +43,10 @@ class LibroController {
         }
     }
 
-    /** Sanitiza un string del input */
     private function str(string $key): string {
         return trim($_POST[$key] ?? '');
     }
 
-    /** Recoge y valida campos del formulario libro */
     private function collectForm(): array {
         $datos = [
             'isbn'      => $this->str('isbn'),
@@ -43,11 +60,11 @@ class LibroController {
             'ubicacion' => $this->str('ubicacion'),
             'copias'    => $this->str('copias'),
             'categoria' => $this->str('categoria'),
+            'estado'    => $this->str('estado'),
         ];
 
-        $errores = [];
-        // Todos los campos son obligatorios excepto sinopsis
         $requeridos = ['isbn','titulo','autor','editorial','anio','paginas','precio','ubicacion','copias','categoria'];
+        $errores = [];
         foreach ($requeridos as $campo) {
             if ($datos[$campo] === '') {
                 $errores[] = $campo;
@@ -58,7 +75,7 @@ class LibroController {
     }
 
     // ----------------------------------------------------------
-    // Catálogo
+    // T04 / T06 / T07 - Catalogo
     // ----------------------------------------------------------
     public function catalogo(): void {
         $this->requireAuth();
@@ -67,11 +84,10 @@ class LibroController {
         $filtro = trim($_GET['filtro'] ?? '');
         $campo  = $_GET['campo'] ?? '';
 
-        $libros = $this->model->getCatalogo($pagina, $filtro, $campo);
-        $total  = $this->model->getTotalLibros($filtro, $campo);
+        $libros       = $this->model->getCatalogo($pagina, $filtro, $campo);
+        $total        = $this->model->getTotalLibros($filtro, $campo);
         $totalPaginas = (int) ceil($total / 10) ?: 1;
 
-        // Mensaje flash desde operaciones anteriores
         $flash = $_SESSION['flash'] ?? null;
         unset($_SESSION['flash']);
 
@@ -79,25 +95,26 @@ class LibroController {
     }
 
     // ----------------------------------------------------------
-    // Nuevo Libro – GET
+    // T08 - Nuevo Libro (GET)
     // ----------------------------------------------------------
     public function nuevoForm(): void {
         $this->requireAuth();
-        $errores = $_SESSION['form_errores'] ?? [];
-        $datos   = $_SESSION['form_datos']   ?? [];
-        $errorMsg = $_SESSION['form_msg']    ?? '';
+        $errores  = $_SESSION['form_errores'] ?? [];
+        $datos    = $_SESSION['form_datos']   ?? [];
+        $errorMsg = $_SESSION['form_msg']     ?? '';
         unset($_SESSION['form_errores'], $_SESSION['form_datos'], $_SESSION['form_msg']);
         require __DIR__ . '/../views/libros/nuevo.php';
     }
 
     // ----------------------------------------------------------
-    // Nuevo Libro – POST
+    // T12 / T13 / T14 - Nuevo Libro (POST)
     // ----------------------------------------------------------
     public function nuevoGuardar(): void {
         $this->requireAuth();
 
         [$datos, $errores] = $this->collectForm();
 
+        // T13 - Datos requeridos vacios
         if (!empty($errores)) {
             $_SESSION['form_errores'] = $errores;
             $_SESSION['form_datos']   = $datos;
@@ -106,6 +123,7 @@ class LibroController {
             exit;
         }
 
+        // T12 - ISBN duplicado
         if ($this->model->existeISBN($datos['isbn'])) {
             $_SESSION['form_errores'] = ['isbn'];
             $_SESSION['form_datos']   = $datos;
@@ -114,6 +132,7 @@ class LibroController {
             exit;
         }
 
+        // T14 - Alta exitosa -> regresar a E2
         $this->model->insertar($datos);
         $_SESSION['flash'] = ['tipo' => 'success', 'texto' => 'Libro registrado correctamente.'];
         header('Location: index.php?action=catalogo');
@@ -121,7 +140,7 @@ class LibroController {
     }
 
     // ----------------------------------------------------------
-    // Detalles
+    // T09 / T16 - Detalles
     // ----------------------------------------------------------
     public function detalles(): void {
         $this->requireAuth();
@@ -135,7 +154,7 @@ class LibroController {
     }
 
     // ----------------------------------------------------------
-    // Editar – GET
+    // T10 - Editar (GET)
     // ----------------------------------------------------------
     public function editarForm(): void {
         $this->requireAuth();
@@ -155,20 +174,17 @@ class LibroController {
     }
 
     // ----------------------------------------------------------
-    // Editar – POST
+    // T17 / T18 - Editar (POST)
     // ----------------------------------------------------------
     public function editarGuardar(): void {
         $this->requireAuth();
 
-        // ISBN viene de campo oculto (no editable)
         $isbn = trim($_POST['isbn'] ?? '');
         [$datos, $errores] = $this->collectForm();
-        // Para edición, el ISBN ya está fijo; quitar de validación vacíos
         $datos['isbn'] = $isbn;
 
-        // Revalidar sin isbn en requeridos (ya existe)
+        // T17 - Datos requeridos vacios (excepto ISBN)
         $erroresFiltrados = array_filter($errores, fn($e) => $e !== 'isbn');
-
         if (!empty($erroresFiltrados)) {
             $_SESSION['form_errores'] = $erroresFiltrados;
             $_SESSION['form_datos']   = $datos;
@@ -177,6 +193,7 @@ class LibroController {
             exit;
         }
 
+        // T18 - Cambio exitoso -> regresar a E2
         $this->model->actualizar($datos);
         $_SESSION['flash'] = ['tipo' => 'success', 'texto' => 'Libro actualizado correctamente.'];
         header('Location: index.php?action=catalogo');
@@ -184,7 +201,7 @@ class LibroController {
     }
 
     // ----------------------------------------------------------
-    // Eliminar – confirmación modal + POST
+    // T11 - Eliminar (GET) — modal de confirmacion
     // ----------------------------------------------------------
     public function eliminarConfirmar(): void {
         $this->requireAuth();
@@ -197,13 +214,18 @@ class LibroController {
         require __DIR__ . '/../views/libros/eliminar.php';
     }
 
+    // ----------------------------------------------------------
+    // T21 / T22 - Eliminar (POST)
+    // ----------------------------------------------------------
     public function eliminarEjecutar(): void {
         $this->requireAuth();
         $isbn = trim($_POST['isbn'] ?? '');
         if ($isbn !== '') {
+            // T21 - Baja exitosa
             $this->model->eliminar($isbn);
-            $_SESSION['flash'] = ['tipo' => 'warning', 'texto' => 'Libro eliminado del catálogo.'];
+            $_SESSION['flash'] = ['tipo' => 'warning', 'texto' => 'Libro eliminado del catalogo.'];
         }
+        // T22 - Cancelar simplemente regresa a E2 via GET desde la vista
         header('Location: index.php?action=catalogo');
         exit;
     }
